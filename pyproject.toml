@@ -1,0 +1,25 @@
+[project]
+name = "draft-lottery"
+version = "0.1.0"
+description = "Fantasy basketball draft lottery CLI tool for ESPN leagues."
+authors = [
+    { name = "Brian Tanabe" }
+]
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "espn-api>=0.45.1",
+    "requests>=2.31.0",
+    "setuptools>=61.0",
+]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+packages = ["fantasy", "fantasy.draft_lottery"]
+
+[dependency-groups]
+dev = ["pyinstaller>=6.0", "pytest>=8.0", "hypothesis>=6.0.0"]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
