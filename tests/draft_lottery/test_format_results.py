@@ -21,6 +21,7 @@ def _make_team(
         wins=wins,
         losses=losses,
         owner=owner,
+        standing=final_standing,
         final_standing=final_standing,
         made_playoffs=made_playoffs,
     )

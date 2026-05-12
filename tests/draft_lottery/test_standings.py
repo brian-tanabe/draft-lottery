@@ -21,6 +21,7 @@ def _make_team(
     made_playoffs: bool,
     team_name: str = "",
     owner: str = "Owner",
+    standing: int = 0,
 ) -> TeamRecord:
     """Helper to create a TeamRecord for testing."""
     if not team_name:
@@ -31,6 +32,7 @@ def _make_team(
         wins=wins,
         losses=losses,
         owner=owner,
+        standing=standing,
         final_standing=final_standing,
         made_playoffs=made_playoffs,
     )
@@ -40,18 +42,18 @@ def _make_12_team_standings() -> list[TeamRecord]:
     """Create a sorted 12-team standings list (worst first)."""
     # 6 non-playoff teams (bottom 6 by record), 6 playoff teams
     teams = [
-        _make_team(1, wins=5, losses=17, final_standing=12, made_playoffs=False),
-        _make_team(2, wins=6, losses=16, final_standing=11, made_playoffs=False),
-        _make_team(3, wins=7, losses=15, final_standing=10, made_playoffs=False),
-        _make_team(4, wins=8, losses=14, final_standing=9, made_playoffs=False),
-        _make_team(5, wins=9, losses=13, final_standing=8, made_playoffs=False),
-        _make_team(6, wins=10, losses=12, final_standing=7, made_playoffs=False),
-        _make_team(7, wins=11, losses=11, final_standing=6, made_playoffs=True),
-        _make_team(8, wins=12, losses=10, final_standing=5, made_playoffs=True),
-        _make_team(9, wins=13, losses=9, final_standing=4, made_playoffs=True),
-        _make_team(10, wins=14, losses=8, final_standing=3, made_playoffs=True),
-        _make_team(11, wins=15, losses=7, final_standing=2, made_playoffs=True),
-        _make_team(12, wins=16, losses=6, final_standing=1, made_playoffs=True),
+        _make_team(1, wins=5, losses=17, final_standing=12, made_playoffs=False, standing=12),
+        _make_team(2, wins=6, losses=16, final_standing=11, made_playoffs=False, standing=11),
+        _make_team(3, wins=7, losses=15, final_standing=10, made_playoffs=False, standing=10),
+        _make_team(4, wins=8, losses=14, final_standing=9, made_playoffs=False, standing=9),
+        _make_team(5, wins=9, losses=13, final_standing=8, made_playoffs=False, standing=8),
+        _make_team(6, wins=10, losses=12, final_standing=7, made_playoffs=False, standing=7),
+        _make_team(7, wins=11, losses=11, final_standing=6, made_playoffs=True, standing=6),
+        _make_team(8, wins=12, losses=10, final_standing=5, made_playoffs=True, standing=5),
+        _make_team(9, wins=13, losses=9, final_standing=4, made_playoffs=True, standing=4),
+        _make_team(10, wins=14, losses=8, final_standing=3, made_playoffs=True, standing=3),
+        _make_team(11, wins=15, losses=7, final_standing=2, made_playoffs=True, standing=2),
+        _make_team(12, wins=16, losses=6, final_standing=1, made_playoffs=True, standing=1),
     ]
     return teams
 
@@ -74,6 +76,8 @@ class TestGetStandings:
             team.losses = 22 - (10 + i)  # corresponding losses
             team.owners = [{"firstName": f"Owner", "lastName": f"{i + 1}"}]
             team.final_standing = 12 - i  # 12 down to 1
+            team.standing = 12 - i  # 12 down to 1 (worst to best)
+            team.schedule = []
             mock_teams.append(team)
 
         mock_league = MagicMock()
@@ -83,34 +87,50 @@ class TestGetStandings:
         result = get_standings(22603, 2025, "fake_s2", "fake_swid")
 
         assert len(result) == 12
-        # Verify sorted by wins ascending
+        # Verify sorted by wins ascending (worst first)
         for i in range(len(result) - 1):
             assert result[i].wins <= result[i + 1].wins
 
     @patch("fantasy.draft_lottery.standings.League")
-    def test_tiebreaker_losses_descending(self, mock_league_class):
-        """When wins are tied, teams are sorted by losses descending."""
+    def test_tiebreaker_h2h(self, mock_league_class):
+        """When wins/losses are tied, the H2H loser sorts first (worse)."""
         mock_teams = []
-        # Two teams with same wins but different losses
+
+        # Team A: lost H2H to Team B
         team_a = MagicMock()
         team_a.team_id = 1
         team_a.team_name = "Team A"
         team_a.wins = 10
-        team_a.losses = 12  # More losses
+        team_a.losses = 12
         team_a.owners = [{"firstName": "Owner", "lastName": "A"}]
         team_a.final_standing = 8
+        team_a.standing = 9
+        # Team A's schedule: lost to Team B (Team B was home and won)
+        matchup_a = MagicMock()
+        matchup_a.home_team = MagicMock(team_id=2)
+        matchup_a.away_team = MagicMock(team_id=1)
+        matchup_a.winner = "HOME"
+        team_a.schedule = [matchup_a]
         mock_teams.append(team_a)
 
+        # Team B: won H2H against Team A
         team_b = MagicMock()
         team_b.team_id = 2
         team_b.team_name = "Team B"
         team_b.wins = 10
-        team_b.losses = 10  # Fewer losses
+        team_b.losses = 12
         team_b.owners = [{"firstName": "Owner", "lastName": "B"}]
         team_b.final_standing = 7
+        team_b.standing = 8
+        # Team B's schedule: beat Team A (Team B was home and won)
+        matchup_b = MagicMock()
+        matchup_b.home_team = MagicMock(team_id=2)
+        matchup_b.away_team = MagicMock(team_id=1)
+        matchup_b.winner = "HOME"
+        team_b.schedule = [matchup_b]
         mock_teams.append(team_b)
 
-        # Fill remaining 10 teams
+        # Fill remaining 10 teams with distinct records
         for i in range(3, 13):
             team = MagicMock()
             team.team_id = i
@@ -119,6 +139,8 @@ class TestGetStandings:
             team.losses = 22 - (10 + i)
             team.owners = [{"firstName": "Owner", "lastName": f"{i}"}]
             team.final_standing = i
+            team.standing = 12 - i + 1
+            team.schedule = []
             mock_teams.append(team)
 
         mock_league = MagicMock()
@@ -127,11 +149,11 @@ class TestGetStandings:
 
         result = get_standings(22603, 2025, "fake_s2", "fake_swid")
 
-        # Team A (10 wins, 12 losses) should come before Team B (10 wins, 10 losses)
-        # because losses descending means more losses = earlier in list
+        # Team A (H2H loser) should come first (worse position)
         tied_teams = [t for t in result if t.wins == 10]
         assert len(tied_teams) == 2
-        assert tied_teams[0].losses > tied_teams[1].losses
+        assert tied_teams[0].team_name == "Team A"
+        assert tied_teams[1].team_name == "Team B"
 
     @patch("fantasy.draft_lottery.standings.League")
     def test_extracts_correct_fields(self, mock_league_class):
@@ -143,6 +165,8 @@ class TestGetStandings:
         team.losses = 7
         team.owners = [{"firstName": "Brian", "lastName": "Tanabe"}]
         team.final_standing = 2
+        team.standing = 3
+        team.schedule = []
 
         mock_league = MagicMock()
         mock_league.teams = [team] * 12  # 12 identical teams for simplicity
@@ -156,6 +180,7 @@ class TestGetStandings:
         assert record.wins == 15
         assert record.losses == 7
         assert record.owner == "Brian Tanabe"
+        assert record.standing == 3
         assert record.final_standing == 2
         assert record.made_playoffs is True  # final_standing 2 <= 6
 
@@ -171,6 +196,8 @@ class TestGetStandings:
             team.losses = 22 - (i + 5)
             team.owners = [{"firstName": "Owner", "lastName": f"{i + 1}"}]
             team.final_standing = i + 1  # 1 through 12
+            team.standing = i + 1
+            team.schedule = []
             mock_teams.append(team)
 
         mock_league = MagicMock()

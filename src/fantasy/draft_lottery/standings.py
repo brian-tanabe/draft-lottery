@@ -1,5 +1,6 @@
 """Standings module for retrieving and classifying ESPN league standings."""
 
+import functools
 from dataclasses import dataclass
 
 from espn_api.basketball import League
@@ -14,6 +15,7 @@ class TeamRecord:
     wins: int
     losses: int
     owner: str
+    standing: int  # ESPN's playoffSeed: end-of-regular-season ranking (1=best, 12=worst)
     final_standing: int  # Final league placement (1=champion, 12=worst)
     made_playoffs: bool  # Whether the team made the playoffs
 
@@ -37,6 +39,23 @@ def _extract_owner_name(owners: list) -> str:
         name = f"{first} {last}".strip()
         return name if name else "Unknown"
     return str(owner)
+
+
+def _h2h_wins(team_a, team_b) -> int:
+    """Return how many regular-season matchups team_a won against team_b."""
+    wins = 0
+    b_id = team_b.team_id
+    for matchup in team_a.schedule:
+        home = matchup.home_team
+        away = matchup.away_team
+        home_id = home.team_id if hasattr(home, 'team_id') else home
+        away_id = away.team_id if hasattr(away, 'team_id') else away
+        if b_id not in (home_id, away_id):
+            continue
+        a_is_home = (home_id == team_a.team_id)
+        if (matchup.winner == 'HOME' and a_is_home) or (matchup.winner == 'AWAY' and not a_is_home):
+            wins += 1
+    return wins
 
 
 def get_standings(league_id: int, year: int, espn_s2: str, swid: str) -> list[TeamRecord]:
@@ -72,12 +91,20 @@ def get_standings(league_id: int, year: int, espn_s2: str, swid: str) -> list[Te
             f"Please verify the league ID and season year."
         )
 
-    teams: list[TeamRecord] = []
-    for team in league.teams:
-        # Determine playoff status: teams with final_standing <= 6 made playoffs
-        # in a standard 12-team league with 6 playoff spots
-        made_playoffs = team.final_standing <= 6
+    def _compare(team_a, team_b) -> int:
+        if team_a.wins != team_b.wins:
+            return team_a.wins - team_b.wins
+        if team_a.losses != team_b.losses:
+            return team_b.losses - team_a.losses
+        a_h2h = _h2h_wins(team_a, team_b)
+        b_h2h = _h2h_wins(team_b, team_a)
+        return a_h2h - b_h2h
 
+    sorted_espn_teams = sorted(league.teams, key=functools.cmp_to_key(_compare))
+
+    teams: list[TeamRecord] = []
+    for team in sorted_espn_teams:
+        made_playoffs = team.final_standing <= 6
         teams.append(
             TeamRecord(
                 team_id=team.team_id,
@@ -85,13 +112,11 @@ def get_standings(league_id: int, year: int, espn_s2: str, swid: str) -> list[Te
                 wins=team.wins,
                 losses=team.losses,
                 owner=_extract_owner_name(team.owners),
+                standing=team.standing,
                 final_standing=team.final_standing,
                 made_playoffs=made_playoffs,
             )
         )
-
-    # Sort by wins ascending (worst first), then losses descending as tiebreaker
-    teams.sort(key=lambda t: (t.wins, -t.losses))
 
     return teams
 

@@ -71,6 +71,8 @@ uv run pytest tests/draft_lottery/test_properties.py
 
 The draft order is determined using an NBA-style permutation-based lottery for the bottom 3 teams (by regular season record). The remaining picks are assigned by record and playoff finish.
 
+Teams are ranked worst-first by wins, then losses (more losses = worse), then head-to-head record (more H2H losses = worse) as a tiebreaker. This matches what our ESPN league currently uses for its own playoff tie brekaing records (based on me reverse engineering the second-level tie breaker after head-to-head results).
+
 ### Lottery (Picks 1–3)
 
 Ten ping-pong balls numbered 1–10 are used. Three balls are drawn at random (order doesn't matter) to form a combination. There are C(10, 3) = 120 possible combinations. One combination ({8, 9, 10}) is designated invalid and discarded if drawn, leaving 119 valid combinations.
@@ -83,7 +85,10 @@ These 119 combinations are pre-assigned to the 3 lottery teams:
 | 2nd worst record | 48 | 48/119 ≈ 40.3% |
 | 3rd worst record | 23 | 23/119 ≈ 19.3% |
 
-Combinations are assigned in lexicographic order — the first 48 go to the worst team, the next 48 to the second worst, and the remaining 23 to the third worst.
+Combinations are assigned in lexicographic order:
+1. The first 48 go to the worst team
+2. The next 48 to the second worst
+3. The remaining 23 to the third worst
 
 **Drawing process:**
 

@@ -14,6 +14,7 @@ def _make_team(team_id: int, wins: int, losses: int, made_playoffs: bool, final_
         wins=wins,
         losses=losses,
         owner=f"Owner {team_id}",
+        standing=final_standing,
         final_standing=final_standing,
         made_playoffs=made_playoffs,
     )
